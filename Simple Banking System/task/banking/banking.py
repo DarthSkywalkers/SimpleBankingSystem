@@ -2,7 +2,6 @@ from random import randint
 
 
 class BankingSystem:
-
     state = None
     accounts = {}
     card_number_entered = None
@@ -10,13 +9,17 @@ class BankingSystem:
 
     def __init__(self):
         self.state = "main menu"
+        self.BIN = 400000
 
-    def set_state(self, state):
-        self.state = state
-
-    def back_to_menu(self):
-        self.set_state("main menu")
-        self.main_menu()
+    def main_menu(self, command=None):
+        if self.state == "main menu":
+            self.show_main_menu()
+        elif self.state == "account menu" and self.authenticated:
+            self.show_account_menu()
+        elif self.state == "choose option":
+            self.show_option(command)
+        elif self.state == "login - entering card number" or self.state == "login - entering PIN":
+            self.log_into_acc(command)
 
     def show_main_menu(self):
         print("1. Create an account\n"
@@ -29,16 +32,6 @@ class BankingSystem:
               "2. Log out\n"
               "0. Exit")
         self.state = "choose option"
-
-    def main_menu(self, command=None):
-        if self.state == "main menu":
-            self.show_main_menu()
-        elif self.state == "account menu" and self.authenticated:
-            self.show_account_menu()
-        elif self.state == "choose option":
-            self.show_option(command)
-        elif self.state == "login - entering card number" or self.state == "login - entering PIN":
-            self.log_into_acc(command)
 
     def show_option(self, command):
         if not self.authenticated:
@@ -63,7 +56,7 @@ class BankingSystem:
     def create_acc(self):
         card_number = None
         while card_number is None or card_number in list(self.accounts):
-            card_number = f"400000{randint(0, 999999999):09}9"
+            card_number = self.new_account_number()
         card_pin = f"{randint(0, 9999):04}"
         self.accounts[card_number] = {"pin": f"{card_pin}", "balance": 0}
         print("\nYour card has been created\n"
@@ -72,6 +65,27 @@ class BankingSystem:
               "Your card PIN:\n"
               f"{card_pin}\n")
         self.back_to_menu()
+
+    def new_account_number(self):
+        number = str(self.BIN * pow(10, 9) + randint(0, 999999999))
+
+        digits = []
+        step = 1
+        for n in number:
+            n = int(n)
+            if step % 2 != 0:
+                n *= 2
+                if n > 9:
+                    n -= 9
+            digits.append(n)
+            step += 1
+
+        sum_digits = sum(digits)
+        checksum = 0
+        while (sum_digits + checksum) % 10 != 0:
+            checksum += 1
+
+        return f"{number}{checksum}"
 
     def log_into_acc(self, command=None):
         if self.state == "logging into account":
@@ -100,6 +114,13 @@ class BankingSystem:
     def show_balance(self):
         print("\nBalance:", self.accounts[self.authenticated]["balance"])
         self.set_state("account menu")
+        self.main_menu()
+
+    def set_state(self, state):
+        self.state = state
+
+    def back_to_menu(self):
+        self.set_state("main menu")
         self.main_menu()
 
     def logout(self):
