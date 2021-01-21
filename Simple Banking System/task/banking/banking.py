@@ -1,15 +1,18 @@
+import sqlite3
 from random import randint
 
 
 class BankingSystem:
     state = None
-    accounts = {}
     card_number_entered = None
     authenticated = False
 
     def __init__(self):
         self.state = "main menu"
         self.BIN = 400000
+        self.conn = sqlite3.connect("card.s3db")
+        self.c = self.conn.cursor()
+        self.db_init()
 
     def main_menu(self, command=None):
         if self.state == "main menu":
@@ -55,10 +58,14 @@ class BankingSystem:
 
     def create_acc(self):
         card_number = None
-        while card_number is None or card_number in list(self.accounts):
+        while card_number is None:
             card_number = self.new_account_number()
+            q_param = (card_number,)
+            self.c.execute("SELECT count(number) FROM card WHERE number = ?", q_param)
+            if self.c.fetchone()[0] != 0:
+                card_number = None
         card_pin = f"{randint(0, 9999):04}"
-        self.accounts[card_number] = {"pin": f"{card_pin}", "balance": 0}
+        self.db_add_card(card_number, card_pin)
         print("\nYour card has been created\n"
               "Your card number:\n"
               f"{card_number}\n"
@@ -97,8 +104,12 @@ class BankingSystem:
             self.set_state("login - entering PIN")
         elif self.state == "login - entering PIN":
             card_pin = command
-            if self.card_number_entered in list(self.accounts):
-                if self.accounts[self.card_number_entered]["pin"] == card_pin:
+            q_param = (self.card_number_entered,)
+            self.c.execute("SELECT count(number) FROM card WHERE number = ?", q_param)
+            if self.c.fetchone()[0] == 1:
+                self.c.execute("SELECT number, pin FROM card WHERE number = ?", q_param)
+                query_result = self.c.fetchone()
+                if self.card_number_entered == query_result[0] and card_pin == query_result[1]:
                     self.authenticated = self.card_number_entered
                     self.card_number_entered = None
                     print("\nYou have successfully logged in!")
@@ -111,8 +122,25 @@ class BankingSystem:
                 print("Wrong card number or PIN!")
                 self.back_to_menu()
 
+    def db_init(self):
+        self.c.execute("""
+            CREATE TABLE IF NOT EXISTS card (
+                id INTEGER PRIMARY KEY,
+                number TEXT NOT NULL,
+                pin TEXT NOT NULL,
+                balance INTEGER DEFAULT 0);
+            """)
+        self.conn.commit()
+
+    def db_add_card(self, card_number, card_pin):
+        insert = (card_number, card_pin,)
+        self.c.execute("INSERT INTO card (number, pin) VALUES (?, ?)", insert)
+        self.conn.commit()
+
     def show_balance(self):
-        print("\nBalance:", self.accounts[self.authenticated]["balance"])
+        q_param = (self.authenticated,)
+        self.c.execute("SELECT balance FROM card WHERE number = ?", q_param)
+        print("\nBalance:", self.c.fetchone()[0])
         self.set_state("account menu")
         self.main_menu()
 
@@ -129,6 +157,7 @@ class BankingSystem:
         self.back_to_menu()
 
     def exit(self):
+        self.conn.close()
         self.authenticated = False
         print("\nBye!")
         self.set_state("exiting")
